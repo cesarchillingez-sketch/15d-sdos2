@@ -9,16 +9,41 @@ import {
 // ==========================================
 // 1. SYSTEM CONFIGURATION
 // ==========================================
+// PASTE YOUR V4 LIVE GOOGLE APPS SCRIPT URL HERE:
 const API_URL = 'https://script.google.com/macros/s/AKfycbzrUxs2EJV5yHoD5B9St1OkLQt_ycYYprxJsNNnvrh4RyQcRibNWMF4mZuPzVMaxYsOog/exec';
+
+// --- UNIVERSAL API CALLER (Fixes GAS CORS Blocks) ---
+const apiCall = async (action, reqData = {}) => {
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      // CRITICAL: 'text/plain' prevents Google's CORS preflight block
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, ...reqData })
+    });
+    
+    const text = await res.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch(e) {
+      throw new Error("API Connection Failed. Please ensure your GAS Web App is deployed with Access: 'Anyone'.");
+    }
+    
+    if (!result.success) throw new Error(result.message);
+    return result.data;
+  } catch (error) {
+    throw error;
+  }
+};
 
 // ==========================================
 // 2. MAIN APP & ROUTER
 // ==========================================
 export default function App() {
-  const [session, setSession] = useState(null); // { type: 'client'|'admin', creds: {} }
+  const [session, setSession] = useState(null); 
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // Check LocalStorage on Mount
   useEffect(() => {
     const adminCode = localStorage.getItem('15d_admin_auth');
     const clientId = localStorage.getItem('15d_project');
@@ -39,10 +64,9 @@ export default function App() {
     setSession(null);
   };
 
-  if (isInitializing) return <div className="min-h-screen bg-[#0B0B0D] flex items-center justify-center"><Loader2 className="animate-spin text-[#D4AF37]" /></div>;
-
+  // The 'font-sans' wrapper guarantees Lexend applies globally
+  if (isInitializing) return <div className="font-sans min-h-screen bg-[#0B0B0D] flex items-center justify-center"><Loader2 className="animate-spin text-[#D4AF37]" /></div>;
   if (!session) return <LoginGate onLogin={setSession} />;
-
   if (session.type === 'admin') return <AdminOS session={session} onLogout={handleLogout} />;
   if (session.type === 'client') return <ClientOS session={session} onLogout={handleLogout} />;
 }
@@ -51,7 +75,7 @@ export default function App() {
 // 3. LOGIN GATE
 // ==========================================
 function LoginGate({ onLogin }) {
-  const [mode, setMode] = useState('client'); // 'client' | 'admin'
+  const [mode, setMode] = useState('client'); 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,13 +86,7 @@ function LoginGate({ onLogin }) {
     const authCode = e.target.authCode.value;
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'getDashboardData', project_id: projectId, auth_code: authCode })
-      });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.message);
-      
+      await apiCall('getDashboardData', { project_id: projectId, auth_code: authCode });
       localStorage.setItem('15d_project', projectId);
       localStorage.setItem('15d_auth', authCode);
       onLogin({ type: 'client', creds: { projectId, authCode } });
@@ -85,13 +103,7 @@ function LoginGate({ onLogin }) {
     const adminCode = e.target.adminCode.value;
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'getAdminDashboard', payload: { admin_code: adminCode } })
-      });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.message);
-      
+      await apiCall('getAdminDashboard', { payload: { admin_code: adminCode } });
       localStorage.setItem('15d_admin_auth', adminCode);
       onLogin({ type: 'admin', creds: { adminCode } });
     } catch (err) {
@@ -102,12 +114,12 @@ function LoginGate({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0B0D] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="font-sans min-h-screen bg-[#0B0B0D] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-zinc-800/20 blur-[120px] pointer-events-none -z-10"></div>
       
-      <div className="glass-panel w-full max-w-md p-8 bg-white/[0.02] border border-white/5 backdrop-blur-xl rounded-xl">
+      <div className="w-full max-w-md p-8 bg-white/[0.02] border border-white/5 backdrop-blur-xl rounded-xl shadow-2xl">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight"><span className="text-[#D4AF37]">15D</span> OS</h1>
+          <h1 className="text-3xl font-bold font-display tracking-tight"><span className="text-[#D4AF37]">15D</span> OS</h1>
           <p className="text-sm text-zinc-400 mt-2">Enter credentials to access your environment.</p>
         </div>
 
@@ -122,10 +134,10 @@ function LoginGate({ onLogin }) {
               <input type="password" name="authCode" required placeholder="••••••••" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#D4AF37]/50 font-mono" />
             </div>
             {error && <div className="text-red-400 text-sm bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</div>}
-            <button type="submit" disabled={loading} className="w-full bg-white/5 border border-white/10 hover:bg-white/10 text-white py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+            <button type="submit" disabled={loading} className="w-full font-display font-medium bg-white/5 border border-white/10 hover:bg-white/10 text-white py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <><Key size={16} /> Authenticate</>}
             </button>
-            <p className="text-center text-xs text-zinc-500 pt-4 cursor-pointer hover:text-white" onClick={() => setMode('admin')}>Admin Login</p>
+            <p className="text-center text-xs text-zinc-500 pt-4 cursor-pointer hover:text-white transition-colors" onClick={() => setMode('admin')}>Admin Console</p>
           </form>
         ) : (
           <form onSubmit={handleAdminLogin} className="space-y-5">
@@ -134,10 +146,10 @@ function LoginGate({ onLogin }) {
               <input type="password" name="adminCode" required placeholder="Sovereign Access" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#D4AF37]/50 font-mono text-center" />
             </div>
             {error && <div className="text-red-400 text-sm bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</div>}
-            <button type="submit" disabled={loading} className="w-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 hover:bg-[#D4AF37]/20 text-[#D4AF37] py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+            <button type="submit" disabled={loading} className="w-full font-display font-medium bg-[#D4AF37]/10 border border-[#D4AF37]/30 hover:bg-[#D4AF37]/20 text-[#D4AF37] py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <><Unlock size={16} /> Access Network</>}
             </button>
-            <p className="text-center text-xs text-zinc-500 pt-4 cursor-pointer hover:text-white" onClick={() => setMode('client')}>Client Login</p>
+            <p className="text-center text-xs text-zinc-500 pt-4 cursor-pointer hover:text-white transition-colors" onClick={() => setMode('client')}>Client Workspace</p>
           </form>
         )}
       </div>
@@ -157,22 +169,15 @@ function ClientOS({ session, onLogout }) {
 
   const fetchDashboard = async (isPoll = false) => {
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'getDashboardData', project_id: session.creds.projectId, auth_code: session.creds.authCode })
-      });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.message);
-      
+      const result = await apiCall('getDashboardData', { project_id: session.creds.projectId, auth_code: session.creds.authCode });
       setData(prev => {
-        // Check for new messages
-        if (prev && result.data.timeline.length > prev.timeline.length && isPoll) {
-          const latest = result.data.timeline[result.data.timeline.length - 1];
-          if (latest.sender !== result.data.client_name) {
+        if (prev && result.timeline.length > prev.timeline.length && isPoll) {
+          const latest = result.timeline[result.timeline.length - 1];
+          if (latest.sender !== result.client_name) {
             setToast({ title: 'New Update', message: `Message from ${latest.sender}` });
           }
         }
-        return result.data;
+        return result;
       });
     } catch (e) {
       if (e.message.includes('Unauthorized')) onLogout();
@@ -197,11 +202,10 @@ function ClientOS({ session, onLogout }) {
     if (!msg) return;
     e.target.reset();
     
-    // Optimistic UI
     setData(prev => ({...prev, timeline: [...prev.timeline, { id: 'temp', sender: prev.client_name, message: msg, date: new Date().toISOString() }]}));
 
     try {
-      await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'submitMessage', project_id: session.creds.projectId, auth_code: session.creds.authCode, payload: { message: msg } }) });
+      await apiCall('submitMessage', { project_id: session.creds.projectId, auth_code: session.creds.authCode, payload: { message: msg } });
       fetchDashboard(true);
     } catch (e) {
       setToast({ title: 'Error', message: 'Failed to send message.' });
@@ -215,7 +219,7 @@ function ClientOS({ session, onLogout }) {
     setToast({ title: 'Processing', message: 'Routing to engine...' });
 
     try {
-      await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'submitNewRequest', project_id: session.creds.projectId, auth_code: session.creds.authCode, payload: { request_type: type, details } }) });
+      await apiCall('submitNewRequest', { project_id: session.creds.projectId, auth_code: session.creds.authCode, payload: { request_type: type, details } });
       e.target.reset();
       setToast({ title: 'Success', message: 'Request logged successfully.' });
       setTab('dashboard');
@@ -225,18 +229,17 @@ function ClientOS({ session, onLogout }) {
     }
   };
 
-  if (loading || !data) return <div className="min-h-screen bg-[#0B0B0D] flex items-center justify-center"><Loader2 className="animate-spin text-[#D4AF37]" /></div>;
+  if (loading || !data) return <div className="font-sans min-h-screen bg-[#0B0B0D] flex items-center justify-center"><Loader2 className="animate-spin text-[#D4AF37]" /></div>;
 
   const isLocked = data.project_state === 'Paused_Unpaid';
 
   return (
-    <div className="min-h-screen bg-[#0B0B0D] text-zinc-100 flex overflow-hidden">
+    <div className="font-sans min-h-screen bg-[#0B0B0D] text-zinc-100 flex overflow-hidden">
       {toast && <Toast title={toast.title} message={toast.message} onClose={() => setToast(null)} />}
       
-      {/* SIDEBAR */}
       <aside className="w-72 border-r border-white/5 flex flex-col p-6 bg-black z-10 shrink-0">
         <div className="mb-10">
-          <h1 className="text-2xl font-bold tracking-tighter"><span className="text-[#D4AF37]">15D</span> SDOS</h1>
+          <h1 className="text-2xl font-bold font-display tracking-tighter"><span className="text-[#D4AF37]">15D</span> SDOS</h1>
           <p className="text-xs text-zinc-500 mt-1 uppercase tracking-widest">{data.client_name}</p>
         </div>
         <nav className="flex-1 space-y-2">
@@ -258,21 +261,20 @@ function ClientOS({ session, onLogout }) {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 flex border-r border-white/5">
         <div className="flex-1 p-10 overflow-y-auto relative">
           
           {tab === 'dashboard' && (
             <div className="animate-in fade-in duration-300">
-              <h2 className="text-2xl font-bold mb-6">Metrics & Status</h2>
+              <h2 className="text-2xl font-bold font-display mb-6">Metrics & Status</h2>
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <div className="bg-white/[0.02] border border-white/5 p-5 rounded-xl">
                   <p className="text-xs text-zinc-400 uppercase tracking-wider mb-2">Completion</p>
-                  <p className="text-3xl"><span className="text-white">{data.stats.progress_percent}</span><span className="text-[#D4AF37] text-xl">%</span></p>
+                  <p className="text-3xl font-display"><span className="text-white">{data.stats.progress_percent}</span><span className="text-[#D4AF37] text-xl">%</span></p>
                 </div>
                 <div className="bg-white/[0.02] border border-white/5 p-5 rounded-xl">
                   <p className="text-xs text-zinc-400 uppercase tracking-wider mb-2">Pending Review</p>
-                  <p className="text-3xl text-white">{data.stats.pending_review}</p>
+                  <p className="text-3xl font-display text-white">{data.stats.pending_review}</p>
                 </div>
               </div>
               <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-4">Active Queue</h3>
@@ -284,7 +286,7 @@ function ClientOS({ session, onLogout }) {
 
           {tab === 'scope' && (
             <div className="animate-in fade-in duration-300">
-              <h2 className="text-2xl font-bold mb-2">Scope Summary</h2>
+              <h2 className="text-2xl font-bold font-display mb-2">Scope Summary</h2>
               <p className="text-sm text-zinc-400 mb-8">Established deliverables.</p>
               <div className="bg-white/[0.02] border border-[#D4AF37]/20 p-6 rounded-xl">
                 <h3 className="text-sm font-bold text-[#D4AF37] uppercase tracking-widest mb-4 flex items-center gap-2"><ShieldCheck size={16}/> Approved Scope</h3>
@@ -299,12 +301,12 @@ function ClientOS({ session, onLogout }) {
 
           {tab === 'financials' && (
             <div className="animate-in fade-in duration-300">
-              <h2 className="text-2xl font-bold mb-2">Financials</h2>
+              <h2 className="text-2xl font-bold font-display mb-2">Financials</h2>
               <p className="text-sm text-zinc-400 mb-8">Billing and milestones.</p>
               {data.stats.unpaid_invoices > 0 ? (
                 <div className="p-5 rounded-xl border border-red-500/20 bg-red-500/5 flex flex-col gap-3">
                   <div className="flex justify-between items-center"><span className="text-sm font-medium">Outstanding Milestone</span><span className="text-xs uppercase px-2 py-1 bg-red-500/20 text-red-400 rounded">Due</span></div>
-                  <p className="text-xl text-white">Invoice Pending</p>
+                  <p className="text-xl font-display text-white">Invoice Pending</p>
                   <p className="text-xs text-zinc-400">You have {data.stats.unpaid_invoices} unpaid invoice(s). Check email for link.</p>
                 </div>
               ) : (
@@ -318,7 +320,7 @@ function ClientOS({ session, onLogout }) {
 
           {tab === 'engine' && (
             <div className="animate-in fade-in duration-300">
-              <h2 className="text-2xl font-bold mb-2">Scope Engine</h2>
+              <h2 className="text-2xl font-bold font-display mb-2">Scope Engine</h2>
               <p className="text-sm text-zinc-400 mb-8">Submit new requests deterministically.</p>
               <form onSubmit={handleEngineSubmit} className="bg-white/[0.02] border border-white/5 p-6 rounded-xl space-y-5">
                 <div>
@@ -333,7 +335,7 @@ function ClientOS({ session, onLogout }) {
                   <label className="block text-xs font-medium text-zinc-500 uppercase mb-2">Parameters</label>
                   <textarea name="details" required rows="4" placeholder="Describe the feature..." className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#D4AF37]/50 resize-none"></textarea>
                 </div>
-                <button type="submit" className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 hover:bg-[#D4AF37]/20 w-full py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                <button type="submit" className="bg-[#D4AF37]/10 text-[#D4AF37] font-display border border-[#D4AF37]/30 hover:bg-[#D4AF37]/20 w-full py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
                   Submit to Engine <ArrowRight size={16}/>
                 </button>
               </form>
@@ -342,7 +344,7 @@ function ClientOS({ session, onLogout }) {
 
           {tab === 'settings' && (
             <div className="animate-in fade-in duration-300">
-              <h2 className="text-2xl font-bold mb-2">Settings</h2>
+              <h2 className="text-2xl font-bold font-display mb-2">Settings</h2>
               <p className="text-sm text-zinc-400 mb-8">System preferences.</p>
               <div className="bg-white/[0.02] border border-white/5 p-6 rounded-xl space-y-4">
                 <div className="flex items-center justify-between">
@@ -359,7 +361,7 @@ function ClientOS({ session, onLogout }) {
         {/* TIMELINE (CHAT) */}
         <div className="w-96 bg-black/20 flex flex-col shrink-0">
           <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
-            <h2 className="text-sm font-bold flex items-center gap-2"><Radio size={16} className="text-[#D4AF37]"/> Unified Timeline</h2>
+            <h2 className="text-sm font-display font-bold flex items-center gap-2"><Radio size={16} className="text-[#D4AF37]"/> Unified Timeline</h2>
           </div>
           <div ref={timelineRef} className="flex-1 overflow-y-auto p-6 space-y-6">
             {data.timeline.map((log, i) => <TimelineBubble key={i} log={log} clientName={data.client_name} />)}
@@ -383,7 +385,7 @@ function ClientOS({ session, onLogout }) {
 function AdminOS({ session, onLogout }) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState('queue');
-  const [activeClient, setActiveClient] = useState(null); // Project ID
+  const [activeClient, setActiveClient] = useState(null); 
   const [clientData, setClientData] = useState(null);
   const [toast, setToast] = useState(null);
   const timelineRef = useRef(null);
@@ -391,13 +393,11 @@ function AdminOS({ session, onLogout }) {
   const fetchAdminData = async () => {
     try {
       if (activeClient) {
-        const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'getAdminClientDetails', payload: { admin_code: session.creds.adminCode, target_project_id: activeClient } }) });
-        const result = await res.json();
-        setClientData(result.data);
+        const result = await apiCall('getAdminClientDetails', { payload: { admin_code: session.creds.adminCode, target_project_id: activeClient } });
+        setClientData(result);
       } else {
-        const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'getAdminDashboard', payload: { admin_code: session.creds.adminCode } }) });
-        const result = await res.json();
-        setData(result.data);
+        const result = await apiCall('getAdminDashboard', { payload: { admin_code: session.creds.adminCode } });
+        setData(result);
       }
     } catch (e) {
       if (e.message.includes('Unauthorized')) onLogout();
@@ -417,7 +417,7 @@ function AdminOS({ session, onLogout }) {
   const updateStatus = async (reqId, projId, newStatus) => {
     if (!window.confirm(`Change status to ${newStatus}?`)) return;
     try {
-      await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'updateRequestStatus', payload: { admin_code: session.creds.adminCode, request_id: reqId, project_id: projId, new_status: newStatus } }) });
+      await apiCall('updateRequestStatus', { payload: { admin_code: session.creds.adminCode, request_id: reqId, project_id: projId, new_status: newStatus } });
       setToast({ title: 'Success', message: 'Status updated.' });
       fetchAdminData();
     } catch (e) { setToast({ title: 'Error', message: e.message }); }
@@ -431,7 +431,7 @@ function AdminOS({ session, onLogout }) {
     
     setClientData(prev => ({...prev, timeline: [...prev.timeline, { id: 'temp', sender: 'Admin', message: msg, date: new Date().toISOString() }]}));
     try {
-      await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'adminSubmitMessage', payload: { admin_code: session.creds.adminCode, target_project_id: activeClient, message: msg } }) });
+      await apiCall('adminSubmitMessage', { payload: { admin_code: session.creds.adminCode, target_project_id: activeClient, message: msg } });
       fetchAdminData();
     } catch (e) { setToast({ title: 'Error', message: 'Failed to send.' }); }
   };
@@ -439,12 +439,12 @@ function AdminOS({ session, onLogout }) {
   const actionableCount = data?.queue?.filter(r => ['Awaiting_Admin_Verification', 'Disputed', 'Intake'].includes(r.status)).length || 0;
 
   return (
-    <div className="min-h-screen bg-[#0B0B0D] text-zinc-100 flex overflow-hidden">
+    <div className="font-sans min-h-screen bg-[#0B0B0D] text-zinc-100 flex overflow-hidden">
       {toast && <Toast title={toast.title} message={toast.message} onClose={() => setToast(null)} />}
       
       <aside className="w-72 border-r border-white/5 flex flex-col p-6 bg-black z-10 shrink-0">
         <div className="mb-10">
-          <h1 className="text-2xl font-bold tracking-tighter"><span className="text-[#D4AF37]">15D</span> Admin</h1>
+          <h1 className="text-2xl font-bold font-display tracking-tighter"><span className="text-[#D4AF37]">15D</span> Admin</h1>
           <p className="text-xs text-zinc-500 mt-1 uppercase tracking-widest">Sovereign Control</p>
         </div>
         <nav className="flex-1 space-y-2">
@@ -460,7 +460,7 @@ function AdminOS({ session, onLogout }) {
 
       <main className="flex-1 flex flex-col relative">
         <div className="p-6 md:p-8 border-b border-white/5 bg-black/20 flex justify-between items-center">
-          <h2 className="text-2xl font-bold">{activeClient ? 'Client Drill-Down' : tab === 'queue' ? 'Scope Routing' : tab === 'matrix' ? 'Operations Matrix' : 'Settings'}</h2>
+          <h2 className="text-2xl font-bold font-display">{activeClient ? 'Client Drill-Down' : tab === 'queue' ? 'Scope Routing' : tab === 'matrix' ? 'Operations Matrix' : 'Settings'}</h2>
           {activeClient && <button onClick={()=>{setActiveClient(null); setTab('matrix');}} className="text-sm flex items-center gap-2 text-zinc-400 hover:text-white bg-white/5 px-4 py-2 rounded-lg"><ArrowLeft size={16}/> Back to Matrix</button>}
         </div>
 
@@ -507,17 +507,16 @@ function AdminOS({ session, onLogout }) {
             </div>
           )}
 
-          {/* ACTIVE CLIENT DRILL DOWN */}
           {activeClient && clientData && (
             <div className="flex h-full gap-6 animate-in fade-in absolute inset-0 p-8">
               <div className="w-1/2 flex flex-col gap-6 overflow-y-auto pr-2">
                 <div>
-                  <h3 className="text-2xl font-bold text-[#D4AF37]">{clientData.client_name}</h3>
+                  <h3 className="text-2xl font-bold font-display text-[#D4AF37]">{clientData.client_name}</h3>
                   <p className="text-xs text-zinc-500 font-mono mt-1">{activeClient} • {clientData.project_state.replace('_',' ')}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/[0.02] border border-white/5 p-4 rounded-xl"><p className="text-[10px] text-zinc-500 uppercase mb-1">Completion</p><p className="text-2xl">{clientData.stats.progress_percent}%</p></div>
-                  <div className="bg-white/[0.02] border border-white/5 p-4 rounded-xl"><p className="text-[10px] text-zinc-500 uppercase mb-1">Unpaid</p><p className={`text-2xl ${clientData.stats.unpaid_invoices > 0 ? 'text-red-400' : ''}`}>{clientData.stats.unpaid_invoices}</p></div>
+                  <div className="bg-white/[0.02] border border-white/5 p-4 rounded-xl"><p className="text-[10px] text-zinc-500 uppercase mb-1">Completion</p><p className="text-2xl font-display">{clientData.stats.progress_percent}%</p></div>
+                  <div className="bg-white/[0.02] border border-white/5 p-4 rounded-xl"><p className="text-[10px] text-zinc-500 uppercase mb-1">Unpaid</p><p className={`text-2xl font-display ${clientData.stats.unpaid_invoices > 0 ? 'text-red-400' : ''}`}>{clientData.stats.unpaid_invoices}</p></div>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-zinc-500 uppercase mb-3">Client Queue</h3>
@@ -527,7 +526,7 @@ function AdminOS({ session, onLogout }) {
                 </div>
               </div>
               <div className="w-1/2 bg-black/40 border border-white/5 rounded-xl flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center gap-2 text-sm text-[#D4AF37]"><MessageSquare size={16}/> Comms Link</div>
+                <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between"><span className="text-sm font-bold font-display text-[#D4AF37] flex items-center gap-2"><MessageSquare size={16}/> Comms Link</span></div>
                 <div ref={timelineRef} className="flex-1 overflow-y-auto p-6 space-y-6">
                   {clientData.timeline.map((log, i) => <TimelineBubble key={i} log={log} clientName={clientData.client_name} isAdminView />)}
                 </div>
@@ -541,7 +540,7 @@ function AdminOS({ session, onLogout }) {
 
           {tab === 'settings' && !activeClient && (
             <div className="bg-white/[0.02] border border-white/5 p-6 rounded-xl max-w-md">
-              <h3 className="text-lg font-bold mb-4">Admin Config</h3>
+              <h3 className="text-lg font-bold font-display mb-4">Admin Config</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between"><div><p className="text-sm font-medium">Global Webhooks</p><p className="text-xs text-zinc-500">Discord Integration</p></div><div className="w-10 h-5 bg-[#D4AF37]/50 rounded-full flex items-center justify-end px-1"><div className="w-3 h-3 bg-white rounded-full"></div></div></div>
               </div>
@@ -607,7 +606,7 @@ function TimelineBubble({ log, clientName, isAdminView = false }) {
 function Toast({ title, message, onClose }) {
   useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, []);
   return (
-    <div className="bg-[#0B0B0D] border border-white/10 p-4 rounded-xl flex items-start gap-3 w-80 shadow-2xl border-l-2 border-l-[#D4AF37] animate-in slide-in-from-right-8">
+    <div className="bg-[#0B0B0D] border border-white/10 p-4 rounded-xl flex items-start gap-3 w-80 shadow-2xl border-l-2 border-l-[#D4AF37] animate-in slide-in-from-right-8 z-50">
       <Bell size={16} className="text-[#D4AF37] mt-0.5" />
       <div className="flex-1">
         <div className="flex justify-between items-center"><h4 className="text-sm font-bold text-white">{title}</h4><X size={14} className="text-zinc-500 cursor-pointer" onClick={onClose}/></div>
